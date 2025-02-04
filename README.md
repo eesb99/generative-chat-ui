@@ -59,3 +59,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Simulation: 2D Physics Prime Burst Simulation
+
+This project includes a 2D simulation built with native [Three.js](https://threejs.org/). The simulation features the following elements:
+
+- A box positioned on the floor that bursts open at random intervals, simulating an explosion.
+- Upon explosion, the box releases multiple particles that display prime numbers.
+- The prime numbers are **genuinely computed on the fly** using a trial division algorithm. This guarantees that each number is a true prime.
+- The computed prime is formatted in scientific notation with 3 decimal places (e.g., `7.000e0`).
+- The particles follow basic physics: they are launched in a fan-shaped burst, experience gravity, and have velocity decay.
+- Additionally, particles freeze at their peak for 3 seconds before falling back down, adding a dramatic slow-motion effect.
+
+This simulation demonstrates a creative approach to combining computational mathematics with real-time graphics and physics.

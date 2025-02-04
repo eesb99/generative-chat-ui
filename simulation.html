@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2D Physics Box Explosion Simulation</title>
+    <style>
+      body { margin: 0; overflow: hidden; background: #000; }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      // Import Three.js from a CDN
+      import * as THREE from 'https://unpkg.com/three@0.150.1/build/three.module.js';
+
+      // Create scene, orthographic camera, and renderer
+      const scene = new THREE.Scene();
+      const aspect = window.innerWidth / window.innerHeight;
+      const d = 100;
+      const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+      camera.position.set(0, 0, 500);
+      camera.lookAt(0, 0, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Create a floor
+      const floorGeometry = new THREE.PlaneGeometry(400, 10);
+      const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.position.y = -90;
+      scene.add(floor);
+
+      // Create a box that sits on the floor
+      const boxGeometry = new THREE.BoxGeometry(40, 40, 1);
+      const boxMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const box = new THREE.Mesh(boxGeometry, boxMaterial);
+      box.position.set(0, -70, 0);
+      scene.add(box);
+
+      // Array to store explosion particles
+      const particles = [];
+
+      // Returns true if n is a prime number
+      function isPrime(n) {
+        if (n <= 1) return false;
+        if (n <= 3) return true;
+        if (n % 2 === 0 || n % 3 === 0) return false;
+        for (let i = 5; i * i <= n; i += 6) {
+          if (n % i === 0 || n % (i + 2) === 0) return false;
+        }
+        return true;
+      }
+
+      // Returns a genuine prime number
+      function getTruePrime() {
+        // Start with a random candidate between 2 and 1000
+        let candidate = Math.floor(Math.random() * 9999) + 2;
+        while (!isPrime(candidate)) {
+          candidate++;
+        }
+        return candidate;
+      }
+
+      // Returns a random prime number in scientific notation
+      function getRandomPrimeNotation() {
+        const value = getTruePrime();
+        return value.toExponential(3); // e.g., 7.000e0
+      }
+
+      // Create a sprite that displays text using a canvas texture
+      function createTextSprite(message) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const fontSize = 48;
+        canvas.width = 256;
+        canvas.height = 128;
+        context.font = `${fontSize}px Arial`;
+        context.fillStyle = 'white';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(message, canvas.width / 2, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(20, 10, 1);
+        return sprite;
+      }
+
+      // Trigger an explosion from the box
+      function triggerExplosion() {
+        // Hide the box during the explosion
+        scene.remove(box);
+
+        // Create a random number of particles
+        const numParticles = 10 + Math.floor(Math.random() * 10);
+        for (let i = 0; i < numParticles; i++) {
+          const text = getRandomPrimeNotation();
+          const sprite = createTextSprite(text);
+          sprite.position.copy(box.position);
+          scene.add(sprite);
+
+          // Fan explosion: angle between -45 and +45 degrees
+          const angle = (Math.random() - 0.5) * Math.PI/2; // -45 to 45 degrees in radians
+          const speed = (5.25 + Math.random() * 2.25) * 0.5;
+          const velocity = new THREE.Vector3(speed * Math.sin(angle) * 0.3, speed * Math.cos(angle) * 2.0, 0);
+          particles.push({
+            sprite,
+            velocity,
+            life: 100,  // Lifetime for particle updates
+            trail: [],   // Store positions for the fading trail
+            hasFrozen: false,
+            freezeStart: null,
+            freezePos: null
+          });
+        }
+
+        // Reset the box after a short delay
+        setTimeout(() => {
+          scene.add(box);
+        }, 1000);
+
+        // Schedule the next explosion at a random interval (2-5 seconds)
+        const nextInterval = 2000 + Math.random() * 3000;
+        setTimeout(triggerExplosion, nextInterval);
+      }
+
+      // Start the explosion sequence after 2 seconds
+      setTimeout(triggerExplosion, 2000);
+
+      // Physics parameters
+      const gravity = 0.1;
+      const velocityDecay = 0.99;
+
+      // Material for the fading trail lines
+      const trailMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // Update each particle's position and trail
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+
+          const now = performance.now();
+          if (!p.hasFrozen && p.velocity.y <= 0) {
+            if (!p.freezeStart) {
+              p.freezeStart = now;
+              p.freezePos = p.sprite.position.clone();
+            }
+            if (now - p.freezeStart < 3000) {
+              // Freeze the particle for 3 seconds: keep its position fixed
+              p.sprite.position.copy(p.freezePos);
+              // Skip further updates for this particle in this frame
+              continue;
+            } else {
+              p.hasFrozen = true;
+              p.velocity.y = 0; // Reset vertical velocity to 0 to start falling
+            }
+          }
+
+          // Apply physics: gravity and velocity decay
+          p.velocity.y -= gravity;
+          p.velocity.multiplyScalar(velocityDecay);
+          p.sprite.position.add(p.velocity);
+
+          // Record the trail
+          p.trail.push(p.sprite.position.clone());
+          if (p.trail.length > 20) p.trail.shift();
+
+          // Remove particle if its life expired or if it's off-screen
+          p.life--;
+          if (p.life <= 0 || p.sprite.position.y < -100) {
+            scene.remove(p.sprite);
+            if (p.trailLine) scene.remove(p.trailLine);
+            particles.splice(i, 1);
+            continue;
+          }
+
+          // Update the trail line (remove old line and create new one)
+          if (p.trailLine) {
+            scene.remove(p.trailLine);
+          }
+          if (p.trail.length > 1) {
+            const trailGeometry = new THREE.BufferGeometry().setFromPoints(p.trail);
+            p.trailLine = new THREE.Line(trailGeometry, trailMaterial);
+            scene.add(p.trailLine);
+          }
+        }
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Adjust camera and renderer on window resize
+      window.addEventListener('resize', () => {
+        const aspect = window.innerWidth / window.innerHeight;
+        camera.left = -d * aspect;
+        camera.right = d * aspect;
+        camera.top = d;
+        camera.bottom = -d;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
